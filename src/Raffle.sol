@@ -1,24 +1,3 @@
-// Layout of Contract:
-// version
-// imports
-// errors
-// interfaces, libraries, contracts
-// Type declarations
-// State variables
-// Events
-// Modifiers
-// Functions
-
-// Layout of Functions:
-// constructor
-// receive function (if exists)
-// fallback function (if exists)
-// external
-// public
-// internal
-// private
-// view & pure functions
-
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.18;
 
@@ -31,12 +10,16 @@ import {VRFConsumerBaseV2} from "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2
  * @notice This contract is for creating a sample raffle
  * @dev Implements Chainlink VRFv2
  */
-
-contract Raffle is VRFConsumerBaseV2 {
+contract RaffleNew is VRFConsumerBaseV2 {
     /** Custom Errors */
     error Raffle__NotEnoughEthSent();
     error Raffle__TransferFailed();
     error Raffle_RaffleNotOpen();
+    error Raffle__UpkeepNotNeeded(
+        uint256 currentBalance,
+        uint256 numPlayers,
+        uint256 raffleState
+    );
 
     /** Enum */
     enum RaffleState {
@@ -58,9 +41,9 @@ contract Raffle is VRFConsumerBaseV2 {
     uint32 private constant NUM_WORDS = 1;
 
     // storage variables
-    uint256 private s_lastWinnerPickedTimeStamp;
     // since we have to pay one of the players, we have to make this as payable.
     address payable[] private s_players;
+    uint256 private s_lastWinnerPickedTimeStamp;
     address private s_recentWinner;
     RaffleState private s_raffleState;
 
@@ -69,6 +52,7 @@ contract Raffle is VRFConsumerBaseV2 {
     event PickedWinner(address indexed winner);
 
     /** Functions */
+
     constructor(
         uint256 _entranceFee,
         uint256 _interval,
@@ -79,7 +63,7 @@ contract Raffle is VRFConsumerBaseV2 {
     ) VRFConsumerBaseV2(_vrfCoordinator) {
         i_entranceFee = _entranceFee;
         i_interval = _interval;
-        s_raffleState = RaffleState.OPEN;
+        // s_raffleState = RaffleState.OPEN;
         s_lastWinnerPickedTimeStamp = block.timestamp;
         // VRF
         i_vrfCoordinator = VRFCoordinatorV2Interface(_vrfCoordinator);
@@ -90,11 +74,44 @@ contract Raffle is VRFConsumerBaseV2 {
 
     function enterRaffle() external payable {
         if (msg.value < i_entranceFee) revert Raffle__NotEnoughEthSent();
-        if (s_raffleState != RaffleState.OPEN) revert Raffle_RaffleNotOpen();
         s_players.push(payable(msg.sender));
         // msg.sender is not automatically considered payable
         // Therfore explicitly convert msg.sender to payable before pushing it into an array of address payable type.
         emit EnteredRaffle(msg.sender);
+    }
+
+    // chainlink automation will call this checkUpkeep fn.
+    // this fn will return true, based on the following conditions
+    // 1. The time interval has passed between raffle runs.
+    // 2. Raffle state is OPEN
+    // 3. Raffle contains players
+    // 4. (Implicit) The subscription is funded with LINK.
+    function checkUpkeep(
+        bytes memory /* checkData */
+    ) public view returns (bool upkeepNeeded, bytes memory /* performData */) {
+        bool timeHasPassed = ((block.timestamp - s_lastWinnerPickedTimeStamp) >=
+            i_interval);
+        bool isOpen = s_raffleState == RaffleState.OPEN;
+        bool hasBalance = address(this).balance > 0;
+        bool hasPlayers = s_players.length > 0;
+
+        upkeepNeeded = (timeHasPassed && isOpen && hasBalance && hasPlayers);
+        return (upkeepNeeded, "0x0");
+        // 0x0 -> blank bytes object
+    }
+
+    // After calling the checkup, chainlink will call this below fn
+    // Inside this fn, it call checkUpkeep, once the checkupkeep returns true
+    // performUpkeep will get executed.
+    function performUpkeep(bytes calldata /* performData */) external {
+        (bool upkeepNeeded, ) = checkUpkeep("");
+        if (!upkeepNeeded)
+            revert Raffle__UpkeepNotNeeded(
+                address(this).balance,
+                s_players.length,
+                uint256(s_raffleState)
+            );
+        pickWinner();
     }
 
     function pickWinner() public {
@@ -105,27 +122,34 @@ contract Raffle is VRFConsumerBaseV2 {
         // check to see if enough time has passed.
         // block.timestamp will give the current time.
         // if lastTimeStamp + i_interval = 5 and block.timestamp = 4, then pickwinner will get executed.
-        if (block.timestamp > (s_lastWinnerPickedTimeStamp + i_interval)) {
-            s_raffleState = RaffleState.CALCULATING;
-            uint256 requestId = i_vrfCoordinator.requestRandomWords(
-                i_gasLane, // gas lane -> How much are we willing to spend
-                i_subscriptionId,
-                REQUEST_CONFIRMATIONS,
-                i_callbackGasLimit,
-                NUM_WORDS
-            );
-        }
-        // Getting a random number from chainlink is 2 transaction function
-        // 1. Request the RNG(Random Number Generation)
-        // 2. Get the random number
+
+        i_vrfCoordinator.requestRandomWords(
+            i_gasLane, // gas lane -> How much gas are we willing to spend
+            i_subscriptionId,
+            REQUEST_CONFIRMATIONS,
+            i_callbackGasLimit,
+            NUM_WORDS
+        );
     }
+
+    // Getting a random number from chainlink is 2 transactions function
+    // 1. Request the RNG(Random Number Generation)
+    // 2. Get the random number
+    // pickWinner will request RNG
+    // random number will be the callback fn, this transaction will be sent by chainlink node to us.
+
+    //////////////////////////
+    // i_vrfCoordinator is the chainlink vrf coordinator address, which we will make request to.
+    // this address will vary chain to chain
+    // this request will contain requestRandomWords fn
 
     // The above fn will be called by VRF automation
     // once pickwinner() is called
     // i_vrfCoordinator.requestRandomWords will be called with expected args
     // once requestRandomWords is called, fulfillRandomWords inside the VRFConsumerBaseV2 will be called by VrfCoordinator.
+    // this fn will give us the randomwords
     function fulfillRandomWords(
-        uint256 _requestId,
+        uint256 /*_requestId */,
         uint256[] memory _randomWords
     ) internal override {
         uint256 indexOfWinner = _randomWords[0] % s_players.length;
