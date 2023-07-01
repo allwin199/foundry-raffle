@@ -3,6 +3,7 @@ pragma solidity ^0.8.18;
 
 import {Script} from "forge-std/Script.sol";
 import {VRFCoordinatorV2Mock} from "@chainlink/contracts/src/v0.8/mocks/VRFCoordinatorV2Mock.sol";
+import {LinkToken} from "../test/mocks/LinkToken.sol";
 
 contract HelperConfig is Script {
     struct NetworkConfig {
@@ -12,6 +13,7 @@ contract HelperConfig is Script {
         bytes32 gasLane;
         uint64 subscriptionId;
         uint32 callbackGasLimit;
+        address link;
     }
 
     NetworkConfig public activeNetworkConfig;
@@ -33,7 +35,8 @@ contract HelperConfig is Script {
             vrfCoordinator: 0x8103B0A8A00be2DDC778e6e7eaa21791Cd364625,
             gasLane: 0x474e34a077df58807dbe9c96d3c009b23b3c6d0cce433e59bbf5b34f823bc56c,
             subscriptionId: 0,
-            callbackGasLimit: 500000 //500,000 gas
+            callbackGasLimit: 500000, //500,000 gas
+            link: 0x779877A7B0D9E8603169DdbD7836e478b4624789
         });
         return sepoliaEthConfig;
     }
@@ -45,7 +48,8 @@ contract HelperConfig is Script {
             vrfCoordinator: 0x271682DEB8C4E0901D1a1550aD2e64D568E69909,
             gasLane: 0x8af398995b04c28e9951adb9721ef74c74f93e6a478f39e7e0777be13527e7ef,
             subscriptionId: 0,
-            callbackGasLimit: 500000
+            callbackGasLimit: 500000,
+            link: 0x779877A7B0D9E8603169DdbD7836e478b4624789
         });
         return sepoliaEthConfig;
     }
@@ -70,6 +74,7 @@ contract HelperConfig is Script {
             baseFee,
             gasPriceLink
         );
+        LinkToken link = new LinkToken();
         vm.stopBroadcast();
 
         NetworkConfig memory anvilEthConfig = NetworkConfig({
@@ -78,7 +83,8 @@ contract HelperConfig is Script {
             vrfCoordinator: address(vRFCoordinatorV2Mock),
             gasLane: 0x474e34a077df58807dbe9c96d3c009b23b3c6d0cce433e59bbf5b34f823bc56c, // dummy_one
             subscriptionId: 0, // our script will add this!
-            callbackGasLimit: 500000
+            callbackGasLimit: 500000,
+            link: address(link)
         });
         return anvilEthConfig;
     }
