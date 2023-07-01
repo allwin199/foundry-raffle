@@ -63,7 +63,7 @@ contract Raffle is VRFConsumerBaseV2 {
     ) VRFConsumerBaseV2(_vrfCoordinator) {
         i_entranceFee = _entranceFee;
         i_interval = _interval;
-        // s_raffleState = RaffleState.OPEN;
+        s_raffleState = RaffleState.OPEN;
         s_lastWinnerPickedTimeStamp = block.timestamp;
         // VRF
         i_vrfCoordinator = VRFCoordinatorV2Interface(_vrfCoordinator);
@@ -74,13 +74,13 @@ contract Raffle is VRFConsumerBaseV2 {
 
     function enterRaffle() external payable {
         if (msg.value < i_entranceFee) revert Raffle__NotEnoughEthSent();
+        if (s_raffleState != RaffleState.OPEN) revert Raffle_RaffleNotOpen();
         s_players.push(payable(msg.sender));
         // msg.sender is not automatically considered payable
         // Therfore explicitly convert msg.sender to payable before pushing it into an array of address payable type.
         emit EnteredRaffle(msg.sender);
     }
 
-    // chainlink automation will call this checkUpkeep fn.
     // this fn will return true, based on the following conditions
     // 1. The time interval has passed between raffle runs.
     // 2. Raffle state is OPEN
@@ -100,8 +100,8 @@ contract Raffle is VRFConsumerBaseV2 {
         // 0x0 -> blank bytes object
     }
 
-    // After calling the checkup, chainlink will call this below fn
-    // Inside this fn, it call checkUpkeep, once the checkupkeep returns true
+    // chainlink automation will call this fn.
+    // Inside this fn, it will call checkUpkeep, once the checkupkeep returns true
     // performUpkeep will get executed.
     function performUpkeep(bytes calldata /* performData */) external {
         (bool upkeepNeeded, ) = checkUpkeep("");
@@ -111,6 +111,7 @@ contract Raffle is VRFConsumerBaseV2 {
                 s_players.length,
                 uint256(s_raffleState)
             );
+        s_raffleState = RaffleState.CALCULATING;
         pickWinner();
     }
 
@@ -174,5 +175,9 @@ contract Raffle is VRFConsumerBaseV2 {
 
     function getRaffleState() external view returns (RaffleState) {
         return s_raffleState;
+    }
+
+    function getPlayer(uint256 indexOfPlayer) external view returns (address) {
+        return s_players[indexOfPlayer];
     }
 }
