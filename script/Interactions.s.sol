@@ -5,6 +5,7 @@ import {Script, console} from "forge-std/Script.sol";
 import {HelperConfig} from "./HelperConfig.s.sol";
 import {VRFCoordinatorV2Mock} from "@chainlink/contracts/src/v0.8/mocks/VRFCoordinatorV2Mock.sol";
 import {LinkToken} from "../test/mocks/LinkToken.sol";
+import {DevOpsTools} from "lib/foundry-devops/src/DevOpsTools.sol";
 
 contract CreateSubscription is Script {
     function createSubscriptionUsingConfig() public returns (uint64) {
@@ -12,6 +13,8 @@ contract CreateSubscription is Script {
         (, , address vrfCoordinator, , , , ) = helperConfig
             .activeNetworkConfig();
         return createSubscription(vrfCoordinator);
+        // to create a subscription we need vrfCoordinator address
+        // we are getting this from helperconfig
     }
 
     function createSubscription(
@@ -47,6 +50,8 @@ contract FundSubscription is Script {
             address link
         ) = helperConfig.activeNetworkConfig();
         fundSubscription(vrfCoordinator, subscriptionId, link);
+        // to fund a subscription, we need the subscriptionId, vrfCoordinator and link address
+        // link token is the contract, that we are going to call on for funding subscription
     }
 
     function fundSubscription(
@@ -57,6 +62,7 @@ contract FundSubscription is Script {
         console.log("Funding Subscription", _subscriptionId);
         console.log("Using VRFCoordinator", _vrfCoordinator);
         console.log("On ChainId", block.chainid);
+        // we are deploying a mock link token for local chain
         if (block.chainid == 31337) {
             vm.startBroadcast();
             VRFCoordinatorV2Mock(_vrfCoordinator).fundSubscription(
@@ -77,5 +83,38 @@ contract FundSubscription is Script {
 
     function run() external {
         fundSubscriptionUsingConfig();
+    }
+}
+
+contract AddConsumer is Script {
+    function addConsumer(
+        address _raffle,
+        address _vrfCoordinator,
+        uint64 _subscriptionId
+    ) public {
+        console.log("Adding consumer contract: ", _raffle);
+        console.log("Using vrfCoordinator: ", _vrfCoordinator);
+        console.log("On ChainId: ", block.chainid);
+        vm.startBroadcast();
+        VRFCoordinatorV2Mock(_vrfCoordinator).addConsumer(
+            _subscriptionId,
+            _raffle
+        );
+        vm.stopBroadcast();
+    }
+
+    function addConsumerUsingConfig(address _raffle) public {
+        HelperConfig helperConfig = new HelperConfig();
+        (, , address vrfCoordinator, , uint64 subscriptionId, , ) = helperConfig
+            .activeNetworkConfig();
+        addConsumer(_raffle, vrfCoordinator, subscriptionId);
+    }
+
+    function run() external {
+        address raffle = DevOpsTools.get_most_recent_deployment(
+            "Raffle",
+            block.chainid
+        );
+        addConsumerUsingConfig(raffle);
     }
 }
