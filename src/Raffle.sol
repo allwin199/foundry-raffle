@@ -50,6 +50,7 @@ contract Raffle is VRFConsumerBaseV2 {
     /** Events */
     event EnteredRaffle(address indexed player);
     event PickedWinner(address indexed winner);
+    event RequestedRaffleWinner(uint256 indexed requestId);
 
     /** Functions */
 
@@ -112,25 +113,16 @@ contract Raffle is VRFConsumerBaseV2 {
                 uint256(s_raffleState)
             );
         s_raffleState = RaffleState.CALCULATING;
-        pickWinner();
-    }
 
-    function pickWinner() public {
-        // 1. Get a random number
-        // 2. Use the random number to pick a winner
-        // 3. The above 2 functions should be automatically called after X amount of time.
-        //////////////////////////
-        // check to see if enough time has passed.
-        // block.timestamp will give the current time.
-        // if lastTimeStamp + i_interval = 5 and block.timestamp = 4, then pickwinner will get executed.
-
-        i_vrfCoordinator.requestRandomWords(
+        //////////////////////// requestRandomWords ///////////////////
+        uint256 requestId = i_vrfCoordinator.requestRandomWords(
             i_gasLane, // gas lane -> How much gas are we willing to spend
             i_subscriptionId,
             REQUEST_CONFIRMATIONS,
             i_callbackGasLimit,
             NUM_WORDS
         );
+        emit RequestedRaffleWinner(requestId);
     }
 
     // Getting a random number from chainlink is 2 transactions function
@@ -179,5 +171,17 @@ contract Raffle is VRFConsumerBaseV2 {
 
     function getPlayer(uint256 indexOfPlayer) external view returns (address) {
         return s_players[indexOfPlayer];
+    }
+
+    function getRecentWinner() external view returns (address) {
+        return s_recentWinner;
+    }
+
+    function getLengthOfPlayers() external view returns (uint256) {
+        return s_players.length;
+    }
+
+    function getLastWinnerPickedTimeStamp() external view returns (uint256) {
+        return s_lastWinnerPickedTimeStamp;
     }
 }
